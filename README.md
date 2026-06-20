@@ -1,8 +1,7 @@
 # SID PDF
 
-Gue benci ribet ngurus PDF. Jadi gue bikin tools sendiri.
 
-**SID PDF** — web app buat ngolah PDF. Konversi, kompres, gabung-pisah, proteksi password, watermark. Semua beres dari browser. File lo aman karena diproses lokal, nggak nyentuh cloud, auto-hapus sejam kemudian.
+**SID PDF** — web app buat ngolah PDF. Konversi, kompres, gabung-pisah, proteksi password, watermark. 
 
 ---
 
@@ -40,7 +39,7 @@ Buka `localhost:3000`, done.
 
 ---
 
-## Kenapa gue bikin ini
+## Kenapa bikin ini
 
 Butuh alat PDF yang simpel, nggak pake upload ke server aneh-aneh, dan gue bisa kontrol sendiri. Plus — lumayan buat asah full-stack: Next.js + FastAPI + Python PDF libraries.
 
