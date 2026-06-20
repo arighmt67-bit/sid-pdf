@@ -226,164 +226,23 @@ async def office_to_pdf(file: UploadFile = File(...)):
         with open(input_path, "wb") as f:
             f.write(contents)
 
-        if ext == ".docx":
-            # Use python-docx + reportlab for reliable conversion
-            from docx import Document as DocxDocument
-            from docx.oxml.ns import qn
-            from reportlab.pdfgen import canvas as rl_canvas
-            from reportlab.lib.pagesizes import A4
-            from reportlab.lib.units import mm
-
-            doc = DocxDocument(str(input_path))
-            c = rl_canvas.Canvas(str(pdf_path), pagesize=A4)
-            width, height = A4
-            y = height - 40
-            left_margin = 40
-            right_margin = width - 40
-            line_height = 14
-            font_name = "Helvetica"
-            font_size = 9
-
-            def draw_text(text, bold=False, size=None, color=None):
-                nonlocal y
-                sz = size or font_size
-                fn = "Helvetica-Bold" if bold else font_name
-                c.setFont(fn, sz)
-                if color:
-                    c.setFillColorRGB(*color)
-                else:
-                    c.setFillColorRGB(0, 0, 0)
-
-                words = text.split()
-                line = ""
-                for word in words:
-                    test = f"{line} {word}".strip()
-                    if c.stringWidth(test, fn, sz) < right_margin - left_margin:
-                        line = test
-                    else:
-                        c.drawString(left_margin, y, line)
-                        y -= line_height
-                        line = word
-                        if y < 40:
-                            c.showPage()
-                            c.setFont(fn, sz)
-                            y = height - 40
-                if line:
-                    c.drawString(left_margin, y, line)
-                    y -= line_height
-                if y < 40:
-                    c.showPage()
-                    y = height - 40
-
-            def draw_line(y_pos):
-                c.setStrokeColorRGB(0.7, 0.7, 0.7)
-                c.line(left_margin, y_pos, right_margin, y_pos)
-
-            # Iterate through body elements in order (paragraphs + tables)
-            body = doc.element.body
-            for child in body:
-                tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                
-                if tag == 'p':
-                    # Paragraph
-                    para_text = ""
-                    for run in child.findall('.//' + qn('w:r')):
-                        t = run.find(qn('w:t'))
-                        if t is not None and t.text:
-                            para_text += t.text
-                    
-                    text = para_text.strip()
-                    if not text:
-                        y -= 6
-                        if y < 40:
-                            c.showPage()
-                            y = height - 40
-                        continue
-                    
-                    # Check if bold
-                    is_bold = False
-                    for run in child.findall('.//' + qn('w:r')):
-                        rpr = run.find(qn('w:rPr'))
-                        if rpr is not None:
-                            b = rpr.find(qn('w:b'))
-                            if b is not None:
-                                is_bold = True
-                                break
-                    
-                    sz = 11 if is_bold else font_size
-                    draw_text(text, bold=is_bold, size=sz)
-                    y -= 2  # spacing after paragraph
-                
-                elif tag == 'tbl':
-                    # Table
-                    y -= 6
-                    if y < 60:
-                        c.showPage()
-                        y = height - 40
-                    
-                    rows = child.findall('.//' + qn('w:tr'))
-                    if not rows:
-                        continue
-                    
-                    # Calculate column widths
-                    num_cols = 0
-                    for row in rows:
-                        cells = row.findall(qn('w:tc'))
-                        num_cols = max(num_cols, len(cells))
-                    
-                    if num_cols == 0:
-                        continue
-                    
-                    col_width = (right_margin - left_margin) / num_cols
-                    
-                    for row_idx, row in enumerate(rows):
-                        cells = row.findall(qn('w:tc'))
-                        cell_texts = []
-                        cell_bolds = []
-                        
-                        for cell in cells:
-                            cell_text = ""
-                            cell_bold = False
-                            for p in cell.findall('.//' + qn('w:p')):
-                                for run in p.findall('.//' + qn('w:r')):
-                                    t = run.find(qn('w:t'))
-                                    if t is not None and t.text:
-                                        cell_text += t.text
-                                    rpr = run.find(qn('w:rPr'))
-                                    if rpr is not None and rpr.find(qn('w:b')) is not None:
-                                        cell_bold = True
-                            cell_texts.append(cell_text.strip())
-                            cell_bolds.append(cell_bold)
-                        
-                        # Draw row background for header
-                        row_top = y
-                        if row_idx == 0:
-                            c.setFillColorRGB(0.9, 0.9, 0.95)
-                            c.rect(left_margin, y - 12, right_margin - left_margin, 16, fill=1, stroke=0)
-                            c.setFillColorRGB(0, 0, 0)
-                        
-                        # Draw cell text
-                        c.setFont("Helvetica-Bold" if row_idx == 0 else font_name, 8)
-                        for col, (ct, cb) in enumerate(zip(cell_texts, cell_bolds)):
-                            x = left_margin + col * col_width + 2
-                            cell_w = col_width - 4
-                            # Truncate text to fit cell
-                            display_text = ct
-                            while display_text and c.stringWidth(display_text, c._fontname, c._fontsize) > cell_w:
-                                display_text = display_text[:-1]
-                            c.drawString(x, y - 10, display_text)
-                        
-                        y -= 16
-                        # Draw row separator
-                        draw_line(y + 2)
-                        
-                        if y < 40:
-                            c.showPage()
-                            y = height - 40
-                    
-                    y -= 6  # spacing after table
-
-            c.save()
+        if ext in (".docx", ".xlsx", ".pptx"):
+            # Use LibreOffice headless for perfect 1:1 conversion
+            import subprocess
+            out_dir = str(input_path.parent)
+            result = subprocess.run(
+                ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", out_dir, str(input_path)],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"LibreOffice conversion failed: {result.stderr[:200]}")
+            
+            # LibreOffice outputs to input_dir/input_name.pdf
+            expected = input_path.with_suffix(".pdf")
+            if not expected.exists():
+                raise RuntimeError(f"PDF not created by LibreOffice at {expected}")
+            # Move to our target path
+            expected.rename(pdf_path)
         elif ext in (".jpg", ".jpeg", ".png"):
             img = Image.open(str(input_path)).convert("RGB")
             img.save(str(pdf_path), "PDF")
